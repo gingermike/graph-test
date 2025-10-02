@@ -1,0 +1,24 @@
+# PostgreSQL data
+data/
+*.sql~
+*.swp
+
+# Environment files (optional, include if you want to track defaults)
+# .env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# Log files
+*.log

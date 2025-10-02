@@ -1,0 +1,209 @@
+-- ============================================================================
+-- PERFORMANCE TEST DATA GENERATION
+-- ============================================================================
+
+-- Clear existing data first
+DELETE FROM fact_esg_scores;
+DELETE FROM fact_fundamentals;
+DELETE FROM fact_market_data;
+DELETE FROM fact_risk_attributes;
+DELETE FROM fact_portfolio_attributes;
+DELETE FROM positions;
+DELETE FROM instruments;
+
+-- Reset sequences
+ALTER SEQUENCE instruments_instrument_id_seq RESTART WITH 1;
+ALTER SEQUENCE positions_position_id_seq RESTART WITH 1;
+
+-- ============================================================================
+-- GENERATE INSTRUMENTS
+-- ============================================================================
+
+-- Insert top-level portfolios (10 master portfolios)
+INSERT INTO instruments (instrument_type, ticker, isin)
+SELECT 'PORTFOLIO', NULL, NULL
+FROM generate_series(1, 10);
+
+-- Insert sub-portfolios (100 sub-portfolios, 10 per master)
+INSERT INTO instruments (instrument_type, ticker, isin)
+SELECT 'PORTFOLIO', NULL, NULL
+FROM generate_series(1, 100);
+
+-- Insert securities (5000 equities with realistic tickers)
+INSERT INTO instruments (instrument_type, ticker, isin)
+SELECT
+    'EQUITY',
+    'STK' || LPAD(s::text, 4, '0'),
+    'US' || LPAD((s*123 % 999999999)::text, 9, '0')
+FROM generate_series(1, 5000) s;
+
+-- Insert bonds (1000 bonds)
+INSERT INTO instruments (instrument_type, ticker, isin)
+SELECT
+    'BOND',
+    'BND' || LPAD(s::text, 4, '0'),
+    'US' || LPAD((s*456 % 999999999)::text, 9, '0')
+FROM generate_series(1, 1000) s;
+
+-- ============================================================================
+-- GENERATE HIERARCHICAL POSITIONS
+-- ============================================================================
+
+-- Master portfolios -> Sub-portfolios (each master holds 8-12 sub-portfolios)
+WITH master_portfolios AS (
+    SELECT instrument_id FROM instruments WHERE instrument_type = 'PORTFOLIO' AND instrument_id <= 10
+),
+sub_portfolios AS (
+    SELECT instrument_id, ROW_NUMBER() OVER (ORDER BY instrument_id) as rn
+    FROM instruments WHERE instrument_type = 'PORTFOLIO' AND instrument_id > 10 AND instrument_id <= 110
+)
+INSERT INTO positions (parent_instrument_id, child_instrument_id, quantity, weight, effective_from, effective_to)
+SELECT
+    mp.instrument_id,
+    sp.instrument_id,
+    1.0,
+    (0.05 + (random() * 0.15))::NUMERIC(8,6), -- Random weights 5-20%
+    '2025-01-01'::DATE,
+    NULL
+FROM master_portfolios mp
+CROSS JOIN sub_portfolios sp
+WHERE (sp.rn - 1) / 10 + 1 = mp.instrument_id  -- Distribute sub-portfolios evenly
+   OR (random() < 0.2 AND (sp.rn - 1) / 10 + 1 != mp.instrument_id); -- Some cross-holdings
+
+-- Sub-portfolios -> Securities (each sub-portfolio holds 20-80 securities)
+WITH sub_portfolios AS (
+    SELECT instrument_id FROM instruments WHERE instrument_type = 'PORTFOLIO' AND instrument_id > 10 AND instrument_id <= 110
+),
+securities AS (
+    SELECT instrument_id FROM instruments WHERE instrument_type IN ('EQUITY', 'BOND') AND instrument_id > 110
+)
+INSERT INTO positions (parent_instrument_id, child_instrument_id, quantity, weight, effective_from, effective_to)
+SELECT
+    sp.instrument_id,
+    s.instrument_id,
+    (50 + random() * 10000)::NUMERIC(18,6), -- Random quantities 50-10,050
+    (0.005 + (random() * 0.05))::NUMERIC(8,6), -- Random weights 0.5-5.5%
+    '2025-01-01'::DATE,
+    NULL
+FROM sub_portfolios sp
+CROSS JOIN securities s
+WHERE random() < 0.08  -- Each sub-portfolio gets ~8% of all securities (480 holdings on average)
+ORDER BY random();
+
+-- ============================================================================
+-- GENERATE FACT TABLE DATA
+-- ============================================================================
+
+-- Portfolio Attributes (for all portfolios)
+INSERT INTO fact_portfolio_attributes (instrument_id, attribute_date, portfolio_name, portfolio_strategy, portfolio_manager, benchmark)
+SELECT
+    i.instrument_id,
+    '2025-01-01'::DATE,
+    CASE
+        WHEN i.instrument_id <= 10 THEN 'Master Fund ' || i.instrument_id
+        ELSE 'Sub Fund ' || (i.instrument_id - 10)
+    END,
+    (ARRAY['Growth', 'Value', 'Core', 'Aggressive Growth', 'Conservative', 'Balanced'])[1 + (i.instrument_id % 6)],
+    (ARRAY['John Smith', 'Jane Doe', 'Mike Johnson', 'Sarah Wilson', 'David Brown', 'Lisa Davis'])[1 + (i.instrument_id % 6)],
+    (ARRAY['S&P 500', 'NASDAQ 100', 'Russell 2000', 'MSCI World', 'Bloomberg Aggregate', 'FTSE 100'])[1 + (i.instrument_id % 6)]
+FROM instruments i
+WHERE i.instrument_type = 'PORTFOLIO';
+
+-- Risk Attributes (for portfolios and some securities)
+INSERT INTO fact_risk_attributes (instrument_id, attribute_date, asset_class, region, sector, risk_rating, credit_rating)
+SELECT
+    i.instrument_id,
+    '2025-01-01'::DATE,
+    CASE i.instrument_type
+        WHEN 'PORTFOLIO' THEN (ARRAY['Equity', 'Fixed Income', 'Mixed', 'Alternative'])[1 + (i.instrument_id % 4)]
+        WHEN 'EQUITY' THEN 'Equity'
+        WHEN 'BOND' THEN 'Fixed Income'
+    END,
+    (ARRAY['North America', 'Europe', 'Asia Pacific', 'Emerging Markets', 'Global'])[1 + (i.instrument_id % 5)],
+    CASE i.instrument_type
+        WHEN 'EQUITY' THEN (ARRAY['Technology', 'Healthcare', 'Financial Services', 'Consumer Goods', 'Energy', 'Materials', 'Industrials', 'Utilities', 'Real Estate', 'Communication Services'])[1 + (i.instrument_id % 10)]
+        WHEN 'BOND' THEN (ARRAY['Government', 'Corporate', 'Municipal', 'High Yield'])[1 + (i.instrument_id % 4)]
+        ELSE NULL
+    END,
+    (ARRAY['Low', 'Medium-Low', 'Medium', 'Medium-High', 'High'])[1 + (i.instrument_id % 5)],
+    CASE i.instrument_type
+        WHEN 'BOND' THEN (ARRAY['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-'])[1 + (i.instrument_id % 10)]
+        WHEN 'EQUITY' THEN (ARRAY['AAA', 'AA+', 'AA', 'A+', 'A'])[1 + (i.instrument_id % 5)]
+        ELSE NULL
+    END
+FROM instruments i;
+
+-- Market Data (securities only)
+INSERT INTO fact_market_data (instrument_id, market_date, price, currency, bid_price, ask_price, volume, market_cap)
+SELECT
+    i.instrument_id,
+    '2025-01-01'::DATE,
+    (10 + random() * 1000)::NUMERIC(18,6), -- Prices $10-$1010
+    'USD',
+    (10 + random() * 1000 - 0.05)::NUMERIC(18,6), -- Bid slightly lower
+    (10 + random() * 1000 + 0.05)::NUMERIC(18,6), -- Ask slightly higher
+    (100000 + random() * 50000000)::BIGINT, -- Volume 100K-50M
+    (1000000 + random() * 999000000000)::NUMERIC(18,2) -- Market cap $1M-$999B
+FROM instruments i
+WHERE i.instrument_type IN ('EQUITY', 'BOND');
+
+-- Fundamentals (equities only)
+INSERT INTO fact_fundamentals (instrument_id, reporting_date, revenue, ebitda, net_income, pe_ratio, debt_to_equity)
+SELECT
+    i.instrument_id,
+    '2024-12-31'::DATE,
+    (1000000 + random() * 100000000000)::NUMERIC(18,2), -- Revenue $1M-$100B
+    (100000 + random() * 30000000000)::NUMERIC(18,2), -- EBITDA
+    (50000 + random() * 25000000000)::NUMERIC(18,2), -- Net Income
+    (8 + random() * 92)::NUMERIC(8,2), -- P/E ratio 8-100
+    (random() * 5)::NUMERIC(8,2) -- Debt/Equity 0-5
+FROM instruments i
+WHERE i.instrument_type = 'EQUITY';
+
+-- ESG Scores (all instruments)
+INSERT INTO fact_esg_scores (instrument_id, score_date, esg_score, environmental_score, social_score, governance_score)
+SELECT
+    i.instrument_id,
+    '2025-01-01'::DATE,
+    (30 + random() * 70)::NUMERIC(5,2), -- ESG score 30-100
+    (30 + random() * 70)::NUMERIC(5,2), -- Environmental 30-100
+    (30 + random() * 70)::NUMERIC(5,2), -- Social 30-100
+    (30 + random() * 70)::NUMERIC(5,2)  -- Governance 30-100
+FROM instruments i;
+
+-- ============================================================================
+-- PERFORMANCE STATISTICS
+-- ============================================================================
+
+-- Show data counts
+SELECT
+    'Instruments' as table_name,
+    COUNT(*) as row_count,
+    COUNT(*) FILTER (WHERE instrument_type = 'PORTFOLIO') as portfolios,
+    COUNT(*) FILTER (WHERE instrument_type = 'EQUITY') as equities,
+    COUNT(*) FILTER (WHERE instrument_type = 'BOND') as bonds
+FROM instruments
+
+UNION ALL
+
+SELECT 'Positions', COUNT(*), NULL, NULL, NULL FROM positions
+UNION ALL
+SELECT 'Portfolio Attributes', COUNT(*), NULL, NULL, NULL FROM fact_portfolio_attributes
+UNION ALL
+SELECT 'Risk Attributes', COUNT(*), NULL, NULL, NULL FROM fact_risk_attributes
+UNION ALL
+SELECT 'Market Data', COUNT(*), NULL, NULL, NULL FROM fact_market_data
+UNION ALL
+SELECT 'Fundamentals', COUNT(*), NULL, NULL, NULL FROM fact_fundamentals
+UNION ALL
+SELECT 'ESG Scores', COUNT(*), NULL, NULL, NULL FROM fact_esg_scores;
+
+-- Show average holdings per portfolio
+SELECT
+    'Holdings per Portfolio' as metric,
+    ROUND(AVG(holding_count), 2) as average_value
+FROM (
+    SELECT parent_instrument_id, COUNT(*) as holding_count
+    FROM positions
+    GROUP BY parent_instrument_id
+) stats;
