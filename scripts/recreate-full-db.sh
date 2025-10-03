@@ -29,21 +29,21 @@ fi
 
 echo ""
 echo -e "${RED}Stopping containers and removing volumes...${NC}"
-docker-compose down -v
+docker compose down -v
 
 echo ""
 echo -e "${GREEN}Starting fresh PostgreSQL container...${NC}"
-docker-compose up -d
+docker compose up -d
 
 echo ""
 echo "Waiting for database to be ready (PostgreSQL latest takes longer to start)..."
 for i in {1..60}; do
-    if docker-compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1; then
+    if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1; then
         echo -e "${GREEN}Database is ready!${NC}"
         break
     fi
     if [ $i -eq 60 ]; then
-        echo -e "${RED}Database failed to start. Check logs with: docker-compose logs postgres${NC}"
+        echo -e "${RED}Database failed to start. Check logs with: docker compose logs postgres${NC}"
         exit 1
     fi
     echo -n "."
@@ -62,7 +62,7 @@ sleep 5  # Give it time to complete
 # Wait for the massive data load to complete
 echo "Waiting for 50K securities load to complete..."
 for i in {1..180}; do
-    COUNT=$(docker-compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM instruments;" 2>/dev/null | tr -d ' ')
+    COUNT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "SELECT COUNT(*) FROM instruments;" 2>/dev/null | tr -d ' ')
     if [ "$COUNT" = "50280" ]; then
         echo -e "${GREEN}Massive data load completed!${NC}"
         break
@@ -85,7 +85,7 @@ else
 fi
 
 echo "Final step: Verifying data load..."
-docker-compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
     SELECT
         'Database Statistics' as category,
         '===================' as value
@@ -111,7 +111,7 @@ echo -e "${GREEN}✓ Database recreation complete!${NC}"
 echo ""
 echo "You can now:"
 echo "  1. Connect to the database: ./scripts/psql.sh"
-echo "  2. Run example queries: docker-compose exec -T postgres psql -U portfolio_user -d portfolio -f /docker-entrypoint-initdb.d/07-optimized-inheritance-query.sql"
+echo "  2. Run example queries: docker compose exec -T postgres psql -U portfolio_user -d portfolio -f /docker-entrypoint-initdb.d/07-optimized-inheritance-query.sql"
 echo "  3. Test performance: ./scripts/test-performance.sh"
 echo ""
 echo "The database contains:"

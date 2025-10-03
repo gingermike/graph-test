@@ -7,7 +7,7 @@ echo "=== Performance Testing on Large Dataset ==="
 echo
 
 echo "1. Database Size Statistics:"
-docker-compose exec -T postgres psql \
+docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     -c "SELECT
@@ -19,7 +19,7 @@ docker-compose exec -T postgres psql \
 
 echo
 echo "2. Testing Simple Query (All positions for Portfolio 1):"
-time docker-compose exec -T postgres psql \
+time docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     -c "SELECT COUNT(*) as direct_holdings
@@ -28,7 +28,7 @@ time docker-compose exec -T postgres psql \
 
 echo
 echo "3. Testing Recursive Query WITHOUT Inheritance (Portfolio 1):"
-time docker-compose exec -T postgres psql \
+time docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     -c "WITH RECURSIVE portfolio_tree AS (
@@ -48,7 +48,7 @@ time docker-compose exec -T postgres psql \
 
 echo
 echo "4. Testing Query with ONE Fact Table Join (Portfolio 1):"
-time docker-compose exec -T postgres psql \
+time docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     -c "WITH RECURSIVE portfolio_tree AS (
@@ -71,7 +71,7 @@ time docker-compose exec -T postgres psql \
 
 echo
 echo "5. Testing Aggregation Query (Top 10 regions by holdings):"
-time docker-compose exec -T postgres psql \
+time docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     -c "SELECT fra.region, COUNT(*) as holdings_count

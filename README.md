@@ -19,13 +19,13 @@ A PostgreSQL database project implementing a hierarchical portfolio holdings mod
 ### Option 1: Start with Sample Data (6 securities)
 ```bash
 # Start PostgreSQL container
-docker-compose up -d
+docker compose up -d
 
 # Check if database is ready
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f postgres
+docker compose logs -f postgres
 ```
 
 ### Option 2: Start with Full Test Data (50,000 securities)
@@ -38,10 +38,10 @@ docker-compose logs -f postgres
 
 ```bash
 # Stop containers
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (deletes all data)
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Database Access
@@ -123,7 +123,7 @@ Global Tech Fund (Portfolio 1)
 
 ```
 portfolio-db/
-├── docker-compose.yml     # Docker configuration
+├── docker compose.yml     # Docker configuration
 ├── .env                  # Environment variables
 ├── README.md            # This file
 ├── sql/                 # SQL scripts
@@ -159,11 +159,11 @@ Edit `sql/02-sample-data.sql` to add or modify:
 ### Database Won't Start
 ```bash
 # Check logs
-docker-compose logs postgres
+docker compose logs postgres
 
 # Reset everything
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 ```
 
 ### Permission Issues
