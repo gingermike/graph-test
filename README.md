@@ -59,11 +59,8 @@ docker compose down -v
 # Connect to database CLI
 ./scripts/psql.sh
 
-# Run example queries
-./scripts/run-queries.sh
-
-# Export query results to CSV
-./scripts/export-holdings.sh > holdings.csv
+# Run queries directly via psql
+./scripts/psql.sh
 ```
 
 ### Direct Connection
@@ -103,37 +100,42 @@ Global Tech Fund (Portfolio 1)
 
 ### Get All Holdings with Inherited Attributes
 ```sql
--- See sql/07-optimized-inheritance-query.sql for the full implementation
+-- See sql/08-flexible-inheritance-query.sql for detailed holdings with inheritance
 -- This query efficiently traverses the hierarchy and inherits attributes
--- Performance: ~150ms for 50,000 securities
+-- Works with any hierarchy depth or structure
 ```
 
 ### Aggregate by Region and Sector
 ```sql
--- See sql/03-queries.sql for basic examples
+-- See sql/09-flexible-inheritance-aggregation.sql for aggregation examples
 -- See INHERITANCE_GUIDE.md for detailed optimization techniques
 ```
 
 ## Key Documentation
 
 - **[INHERITANCE_GUIDE.md](INHERITANCE_GUIDE.md)** - Complete guide to attribute inheritance
-- **[sql/07-optimized-inheritance-query.sql](sql/07-optimized-inheritance-query.sql)** - Production-ready inheritance query
+- **[sql/08-flexible-inheritance-query.sql](sql/08-flexible-inheritance-query.sql)** - Flexible inheritance query
+- **[sql/09-flexible-inheritance-aggregation.sql](sql/09-flexible-inheritance-aggregation.sql)** - Aggregation queries
 
 ## Project Structure
 
 ```
 portfolio-db/
-├── docker compose.yml     # Docker configuration
+├── docker-compose.yml     # Docker configuration
 ├── .env                  # Environment variables
 ├── README.md            # This file
 ├── sql/                 # SQL scripts
 │   ├── 01-schema.sql   # Database schema
-│   ├── 02-sample-data.sql # Sample data
-│   └── 03-queries.sql  # Example queries
+│   ├── 06-massive-hierarchy.sql # Hierarchy structure setup
+│   ├── 06-massive-hierarchy-data-only.sql # Data generation
+│   ├── 08-flexible-inheritance-query.sql # Flexible inheritance
+│   ├── 09-flexible-inheritance-aggregation.sql # Aggregation queries
+│   └── 99-massive-data-load.sql # Full data load
 ├── scripts/            # Helper scripts
 │   ├── psql.sh        # Connect to database
-│   ├── run-queries.sh # Run example queries
-│   └── export-holdings.sh # Export data
+│   ├── setup.sh       # Initial setup
+│   ├── recreate-full-db.sh # Load full test data
+│   └── test-performance.sh # Performance testing
 └── data/              # PostgreSQL data (created automatically)
     └── postgres/      # Database files
 ```
@@ -146,13 +148,13 @@ portfolio-db/
 2. Add metadata entries to define inheritable attributes
 3. Update queries to include the new fact table
 
-### Modifying Sample Data
+### Modifying Data
 
-Edit `sql/02-sample-data.sql` to add or modify:
-- Portfolios and securities
-- Positions and weights
-- Attribute values
-- Dates and time periods
+The database uses auto-generated data with a hierarchical structure:
+- Master funds at the top level
+- Regional and strategy funds in middle layers  
+- Securities at the leaf level
+- See `sql/06-massive-hierarchy.sql` for the structure
 
 ## Troubleshooting
 

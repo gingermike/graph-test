@@ -39,7 +39,6 @@ docker compose ps
 echo ""
 echo "✨ Setup complete! You can now:"
 echo "  - Connect to database: ./scripts/psql.sh"
-echo "  - Run example queries: ./scripts/run-queries.sh"
-echo "  - Export data to CSV: ./scripts/export-holdings.sh > holdings.csv"
+echo "  - Run queries via psql with: docker compose exec -T postgres psql -U portfolio_user -d portfolio -f /docker-entrypoint-initdb.d/08-flexible-inheritance-query.sql"
 echo ""
 echo "📖 See README.md for more information"
